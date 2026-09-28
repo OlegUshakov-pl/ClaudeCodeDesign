@@ -242,6 +242,11 @@
   .context-file { display: flex; align-items: center; gap: 9px; padding: 12px 4px; border-bottom: 1px solid var(--border); font-size: 12px; cursor: pointer; }
   .context-file > span { overflow-wrap: anywhere; min-width: 0; } .context-file small { margin-left: auto; color: var(--muted); font-size: 9px; white-space: nowrap; }
   .context-file .icon { width: 15px; color: var(--muted); }
+  input[type="radio"] { accent-color: var(--accent); width: 16px; height: 16px; flex: none; margin: 0; }
+  .model-picker { max-height: 230px; }
+  .model-option:has(input:checked), .model-option:hover { background: var(--accent-soft); }
+  .model-option:has(input:checked) .icon { color: var(--accent); }
+  .model-option input:checked ~ span { font-weight: 600; }
   .command-list { max-height: 340px; overflow-y: auto; margin-top: 16px; }
   .command { display: flex; width: 100%; align-items: center; gap: 12px; text-align: left; padding: 13px 12px; border-radius: 7px; font-size: 12px; }
   .command:hover, .command:focus { background: var(--accent-soft); } .command .icon { color: var(--accent); } .command kbd { margin-left: auto; }

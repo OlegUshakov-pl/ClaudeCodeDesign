@@ -217,8 +217,29 @@ function modelsDialog() {
 function settingsDialog() {
   openDialog('Make yourself at home.', `<form id="settings-form"><label class="field"><span>Appearance</span><select id="theme-select">${['light','dark','system'].map(t => `<option value="${t}" ${state.theme === t ? 'selected' : ''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join('')}</select></label><label class="field"><span>Instructions for your coding partner</span><textarea id="system-instructions" maxlength="8000" rows="4" placeholder="For example: Prefer plain JavaScript, accessible HTML, and small reusable modules.">${esc(state.settings.system)}</textarea><small>These instructions are sent with live API requests.</small></label><div class="notice">${icon('shield')}<span>Sessions, prompts, and files are saved in this browser. API keys are never included in storage or workspace backups. Pending proposals and undo history last for this page session.</span></div><div class="toolbar" style="margin-top:18px"><button class="button small" type="button" data-action="backup">${icon('download')} Export backup</button><button class="button small" type="button" data-action="restore">${icon('upload')} Restore backup</button><button class="button small danger" type="button" data-action="clear-data">Clear local data</button></div><div class="dialog-foot"><button class="button" type="button" data-action="close-dialog">Cancel</button><button class="button primary" type="submit">Save preferences</button></div></form>`, 'A quieter workspace, tuned to the way you work.');
 }
-function contextDialog() {
-  openDialog('A little context goes a long way.', `<form id="context-form"><div class="notice warning">${icon('info')}<span>Only checked files are sent to the model and available to its read/search tools. Importing or opening a file does not share it. Review for secrets before attaching.</span></div><div class="toolbar" style="margin-top:15px"><button class="text-button" type="button" data-action="select-all-context">Select all</button><button class="text-button" type="button" data-action="clear-context">Clear selection</button></div><div class="context-list">${Object.keys(state.files).sort().map(path => `<label class="context-file"><input type="checkbox" name="context" value="${esc(path)}" ${ui.selected.includes(path) ? 'checked' : ''}>${icon('file')}<span>${esc(path)}</span><small>${(state.files[path].length / 1000).toFixed(1)}k chars</small></label>`).join('') || '<p class="small-copy">No files yet. Import a project from the Files view.</p>'}</div><div id="dialog-error" class="dialog-error" role="alert"></div><div class="dialog-foot"><button class="button" type="button" data-action="close-dialog">Cancel</button><button class="button primary" type="submit">Use selected context</button></div></form>`);
+function contextDialog(selected = ui.selected) {
+  const chosen = new Set(selected);
+  openDialog('A little context goes a long way.', `<form id="context-form"><div class="notice warning">${icon('info')}<span>Only checked files are sent to the model and available to its read/search tools. Importing or opening a file does not share it. Review for secrets before attaching.</span></div><div class="toolbar" style="margin-top:15px"><button class="text-button" type="button" data-action="attach-context">${icon('upload')} Attach files</button><button class="text-button" type="button" data-action="select-all-context">Select all</button><button class="text-button" type="button" data-action="clear-context">Clear selection</button></div><div class="context-list">${Object.keys(state.files).sort().map(path => `<label class="context-file"><input type="checkbox" name="context" value="${esc(path)}" ${chosen.has(path) ? 'checked' : ''}>${icon('file')}<span>${esc(path)}</span><small>${(state.files[path].length / 1000).toFixed(1)}k chars</small></label>`).join('') || '<p class="small-copy">No files in this workspace yet. Choose <strong>Attach files</strong> to add .md or .txt documents, or import a project from the Files view.</p>'}</div><div id="dialog-error" class="dialog-error" role="alert"></div><div class="dialog-foot"><button class="button" type="button" data-action="close-dialog">Cancel</button><button class="button primary" type="submit">Use selected context</button></div></form>`);
+}
+async function attachContextFiles(list) {
+  if (!list?.length || !ensureNotRunning()) return;
+  const checked = $$('input[name="context"]:checked', modal).map(e => e.value);
+  try {
+    const result = await importLocalFiles(list, {});
+    let next = state.files;
+    const added = [], reused = [], notices = [...result.skipped];
+    for (const path of result.imported) {
+      if (Object.hasOwn(next, path)) { reused.push(path); continue; }
+      try { next = putFile(next, path, result.files[path]); added.push(path); }
+      catch (error) { notices.push(`${path}: ${error.message}`); }
+    }
+    if (added.length) { state.files = next; persist(); }
+    const selected = [...new Set([...checked, ...added, ...reused])];
+    if (!selected.length) { formError(notices.slice(0, 3).join(' ') || 'No supported files were attached. Choose .md or .txt documents.'); return; }
+    contextDialog(selected);
+    const summary = added.length ? `${added.length} file${added.length === 1 ? '' : 's'} added and checked.` : `${reused.length} file${reused.length === 1 ? '' : 's'} already here, now checked.`;
+    toast(notices.length ? `${summary} ${notices[0]}` : summary);
+  } catch (error) { formError(error.message); }
 }
 function importDialog() {
   openDialog('Bring your world with you.', `<div class="notice">${icon('folder')}<span>Import text files into your browser workspace. Existing files with the same paths are replaced only after confirmation. Secret files, binaries, and dependency folders are excluded.</span></div><div class="toolbar" style="margin:20px 0"><button class="button" data-action="import-files">${icon('file')} Choose files</button><button class="button" data-action="import-folder">${icon('folder')} Choose folder</button></div><form id="github-form"><label class="field"><span>Or import a public GitHub repository</span><input id="github-url" placeholder="owner/repository" required autocomplete="off"><small>Read-only import, up to 24 text files. Public GitHub rate limits apply. No GitHub token is requested or stored. No commits or deployments are performed from this app.</small></label><div id="dialog-error" class="dialog-error" role="alert"></div><div class="dialog-foot"><button class="button primary" id="github-submit" type="submit">${icon('github')} Import repository</button></div></form><p class="small-copy">Limits: 500 KB per text file, 3 MB per workspace, 120 local files per import. Export ZIP downloads your actual source files.</p>`);
@@ -407,6 +428,7 @@ async function handleAction(action, button) {
       finally { if (ui.dialogAbort === controller) ui.dialogAbort = null; }
       break;
     }
+    case 'attach-context': $('#context-file-input')?.click(); break;
     case 'select-all-context': $$('input[name="context"]', modal).forEach(e => e.checked = true); break;
     case 'clear-context': $$('input[name="context"]', modal).forEach(e => e.checked = false); break;
     case 'filter-session': ui.sessionFilter = id; render(); break;
@@ -571,6 +593,11 @@ for (const id of ['file-input','folder-input']) {
     event.target.value = '';
   });
 }
+$('#context-file-input').addEventListener('change', event => {
+  const list = [...event.target.files];
+  event.target.value = '';
+  if (list.length) attachContextFiles(list);
+});
 $('#restore-input').addEventListener('change', async event => {
   const file = event.target.files?.[0]; if (!file || !ensureNotRunning()) return;
   try {

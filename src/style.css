@@ -161,7 +161,9 @@
   .chat-heading .toolbar { flex-shrink: 0; }
   .messages { margin: 25px 0 16px; } .message { padding: 24px 0; border-bottom: 1px solid var(--border); }
   .message-header { display: flex; gap: 10px; align-items: center; font-size: 12px; font-weight: 600; margin-bottom: 15px; }
-  .message-header .brand-mark { width: 26px; height: 26px; } .message-header .text-button { margin-left: auto; }
+  .message-header .brand-mark { width: 26px; height: 26px; }   .message-header .message-actions { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .message-header .message-actions .text-button { font-size: 11px; font-weight: 700; min-height: 24px; padding: 2px 5px; border-radius: 5px; }
+  .message-header .message-actions .text-button:hover { background: var(--accent-soft); color: var(--accent); }
   .message-avatar { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; background: var(--code-bg); font: 16px Georgia, serif; }
   .message-body { font-size: 14px; line-height: 1.9; overflow-wrap: anywhere; }
   .message.user .message-body { white-space: pre-wrap; color: var(--muted); }

@@ -107,7 +107,7 @@ export function hydrate(input) {
   }
   state.selectedFile = Object.hasOwn(state.files, input.selectedFile) ? input.selectedFile : Object.keys(state.files)[0] ?? '';
   const settings = input.settings ?? {};
-  state.settings = { model: text(settings.model, 160, 'auto'), maxTokens: Number.isInteger(settings.maxTokens) && settings.maxTokens >= 256 && settings.maxTokens <= 8192 ? settings.maxTokens : 4096, system: text(settings.system, 8000) };
+  state.settings = { model: text(settings.model, 160, 'auto'), maxTokens: Number.isInteger(settings.maxTokens) && settings.maxTokens >= 256 && settings.maxTokens <= 200_000 ? settings.maxTokens : 4096, system: text(settings.system, 8000) };
   const seen = new Set(); let remaining = 2_000_000;
   state.sessions = (Array.isArray(input.sessions) ? input.sessions : []).slice(0, 100).filter(s => s && typeof s === 'object').map(s => {
     let sid = id(s.id); if (seen.has(sid)) sid = uid(); seen.add(sid);

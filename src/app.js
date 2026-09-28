@@ -1,5 +1,5 @@
 import { STORAGE_KEY, freshState, hydrate, persistedState, uid, escapeHTML as esc, safePath, putFile, totalBytes, stageChange, applyChange, lineDiff, markdown, zipFiles, contextFor } from './core.js';
-import { ANTHROPIC_ORIGIN, endpointOrigin, listModels, runAgent } from './api.js';
+import { ANTHROPIC_ORIGIN, endpointOrigin, listModels, listOllamaModels, runAgent, runOllamaAgent } from './api.js';
 import { previewDocument, importLocalFiles, importPublicRepository } from './preview.js';
 import { AmbientRenderer } from './gpu.js';
 import { icon, mark } from './icons.js';
@@ -196,10 +196,18 @@ modal.addEventListener('close', () => { if (modal.open) return; ui.dialogAbort?.
 modal.addEventListener('click', event => { if (event.target === modal) { const r = modal.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) closeDialog(); } });
 function formError(message) { const node = $('#dialog-error'); if (node) node.textContent = message; else toast(message); }
 function connectDialog() {
-  openDialog('A connection. On your terms.', `<form id="connect-form"><div class="notice">${icon('shield')}<span><strong>This is an independent app, not an Anthropic sign-in.</strong> Use an API key, never your Claude password. The key stays in memory and is forgotten when this page reloads.</span></div><label class="field"><span>Anthropic API key</span><input id="api-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…" value="${esc(credentials.key)}" required><small>Sent only to the endpoint below. Model requests may incur charges from your API provider.</small></label><label class="field"><span>Connection endpoint</span><select id="endpoint-type"><option value="direct" ${credentials.origin === ANTHROPIC_ORIGIN ? 'selected' : ''}>Direct to Anthropic — api.anthropic.com</option><option value="proxy" ${credentials.origin !== ANTHROPIC_ORIGIN ? 'selected' : ''}>Your trusted Anthropic-compatible proxy</option></select></label><label class="field" id="proxy-field" ${credentials.origin === ANTHROPIC_ORIGIN ? 'hidden' : ''}><span>Trusted proxy origin</span><input id="proxy-origin" type="url" placeholder="https://your-proxy.example" value="${credentials.origin === ANTHROPIC_ORIGIN ? '' : esc(credentials.origin)}"><small>The proxy must support /v1/messages, /v1/models, streaming, and CORS. It will receive your API key and selected context.</small></label><label class="check-label"><input id="key-consent" type="checkbox" required><span>I trust this app and the selected endpoint. I understand browser-held keys can be accessed by extensions or compromised page scripts.</span></label><div id="dialog-error" class="dialog-error" role="alert"></div><div class="dialog-foot">${credentials.key ? '<button class="button danger" type="button" data-action="disconnect">Disconnect</button>' : ''}<button class="button" type="button" data-action="close-dialog">Cancel</button><button class="button primary" id="connect-submit" type="submit">${icon('key')} Connect & test</button></div><p class="small-copy">Connection testing requests your model list; it does not generate text. Use a limited-budget key. For shared production use, put credentials behind your own authenticated backend.</p></form>`, 'Bring your key. Keep control of your context.');
+  const isOllama = credentials.origin === 'ollama';
+  openDialog('A connection. On your terms.', `<form id="connect-form"><div class="notice">${icon('shield')}<span><strong>This is an independent app, not an Anthropic sign-in.</strong> Use an API key, never your Claude password. The key stays in memory and is forgotten when this page reloads.</span></div><label class="field"><span>Connection endpoint</span><select id="endpoint-type"><option value="direct" ${!isOllama && credentials.origin === ANTHROPIC_ORIGIN ? 'selected' : ''}>Direct to Anthropic — api.anthropic.com</option><option value="proxy" ${!isOllama && credentials.origin !== ANTHROPIC_ORIGIN ? 'selected' : ''}>Your trusted Anthropic-compatible proxy</option><option value="ollama" ${isOllama ? 'selected' : ''}>Local Ollama</option></select></label><label class="field" id="api-key-field" ${isOllama ? 'hidden' : ''}><span>Anthropic API key</span><input id="api-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…" value="${esc(credentials.key)}" required><small>Sent only to the endpoint below. Model requests may incur charges from your API provider.</small></label><label class="field" id="proxy-field" ${isOllama || credentials.origin === ANTHROPIC_ORIGIN ? 'hidden' : ''}><span>Trusted proxy origin</span><input id="proxy-origin" type="url" placeholder="https://your-proxy.example" value="${credentials.origin === ANTHROPIC_ORIGIN ? '' : esc(credentials.origin)}"><small>The proxy must support /v1/messages, /v1/models, streaming, and CORS. It will receive your API key and selected context.</small></label><label class="check-label" id="key-consent-field" ${isOllama ? 'hidden' : ''}><input id="key-consent" type="checkbox" required><span>I trust this app and the selected endpoint. I understand browser-held keys can be accessed by extensions or compromised page scripts.</span></label><div id="dialog-error" class="dialog-error" role="alert"></div><div class="dialog-foot">${credentials.key ? '<button class="button danger" type="button" data-action="disconnect">Disconnect</button>' : ''}<button class="button" type="button" data-action="close-dialog">Cancel</button><button class="button primary" id="connect-submit" type="submit">${credentials.key ? 'Connected' : 'Connect'}</button></div></form>`);
+  $('#endpoint-type').addEventListener('change', () => {
+    const type = $('#endpoint-type').value;
+    $('#api-key-field').classList.toggle('hidden', type === 'ollama');
+    $('#proxy-field').classList.toggle('hidden', type !== 'proxy');
+    $('#key-consent-field').classList.toggle('hidden', type === 'ollama');
+  });
 }
 function modelsDialog() {
-  openDialog('The right partner for the task.', `<form id="models-form"><p class="small-copy">Use a model ID available to your API account. Refresh the list after connecting; no model availability or pricing is assumed.</p><label class="field"><span>Model ID</span><input id="model-id" list="model-list" value="${esc(state.settings.model)}" required spellcheck="false"><datalist id="model-list">${ui.models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</datalist></label><label class="field"><span>Maximum response tokens</span><input id="max-tokens" type="number" min="256" max="8192" step="1" required value="${state.settings.maxTokens}"><small>Each assistant turn is capped at six API requests. No automatic retries. Costs depend on your provider and model.</small></label><label class="check-label"><input id="demo-mode" type="checkbox" ${ui.demo ? 'checked' : ''}><span><strong>Local demo mode</strong><br>Use scripted examples with no API requests. Turn off for live responses after connecting a key.</span></label><div id="dialog-error" class="dialog-error" role="alert"></div><div class="dialog-foot"><button class="button" type="button" data-action="refresh-models" ${!credentials.key ? 'disabled' : ''}>${icon('refresh')} Refresh models</button><button class="button primary" type="submit">Save model settings</button></div></form>`);
+  const isOllama = credentials.origin === 'ollama';
+  openDialog('The right partner for the task.', `<form id="models-form"><p class="small-copy">${isOllama ? 'Select an Ollama model. Ollama runs locally and supports basic chat, not tool use.' : 'Use a model ID available to your API account. Refresh the list after connecting; no model availability or pricing is assumed.'}</p><label class="field"><span>Model ID</span><input id="model-id" list="model-list" value="${esc(state.settings.model)}" required spellcheck="false"><datalist id="model-list">${ui.models.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</datalist></label><label class="field"><span>Maximum response tokens</span><input id="max-tokens" type="number" min="256" max="8192" step="1" required value="${state.settings.maxTokens}"><small>${isOllama ? 'Ollama runs locally with no per-token cost.' : 'Each assistant turn is capped at six API requests. No automatic retries. Costs depend on your provider and model.'}</small></label><label class="check-label"><input id="demo-mode" type="checkbox" ${ui.demo ? 'checked' : ''}><span><strong>Local demo mode</strong><br>Use scripted examples with no API requests. Turn off for live responses after connecting a key.</span></label><div id="dialog-error" class="dialog-error" role="alert"></div><div class="dialog-foot"><button class="button" type="button" data-action="refresh-models" ${!credentials.key ? 'disabled' : ''}>${icon('refresh')} Refresh models</button><button class="button primary" type="submit">Save model settings</button></div></form>`);
 }
 function settingsDialog() {
   openDialog('Make yourself at home.', `<form id="settings-form"><label class="field"><span>Appearance</span><select id="theme-select">${['light','dark','system'].map(t => `<option value="${t}" ${state.theme === t ? 'selected' : ''}>${t[0].toUpperCase()+t.slice(1)}</option>`).join('')}</select></label><label class="field"><span>Instructions for your coding partner</span><textarea id="system-instructions" maxlength="8000" rows="4" placeholder="For example: Prefer plain JavaScript, accessible HTML, and small reusable modules.">${esc(state.settings.system)}</textarea><small>These instructions are sent with live API requests.</small></label><div class="notice">${icon('shield')}<span>Sessions, prompts, and files are saved in this browser. API keys are never included in storage or workspace backups. Pending proposals and undo history last for this page session.</span></div><div class="toolbar" style="margin-top:18px"><button class="button small" type="button" data-action="backup">${icon('download')} Export backup</button><button class="button small" type="button" data-action="restore">${icon('upload')} Restore backup</button><button class="button small danger" type="button" data-action="clear-data">Clear local data</button></div><div class="dialog-foot"><button class="button" type="button" data-action="close-dialog">Cancel</button><button class="button primary" type="submit">Save preferences</button></div></form>`, 'A quieter workspace, tuned to the way you work.');
@@ -298,6 +306,12 @@ async function sendMessage() {
   const files = { ...state.files }, selected = [...ui.selected], wasDemo = ui.demo;
   try {
     if (wasDemo) await demoResponse(session, answer, controller.signal);
+    else if (credentials.origin === 'ollama') await runOllamaAgent({ ...state.settings, mode: session.mode, messages: session.messages.filter(m => m !== answer && !m.demo), files, selected, signal: controller.signal,
+      onText: text => { answer.text += text; scheduleMessagePaint(answer); },
+      onActivity: activity => { ui.activity.push(activity); if ($('#activity-slot')) $('#activity-slot').innerHTML = activityView(); },
+      onProposal: addProposal,
+      onUsage: usage => { session.usage = usage; },
+    });
     else await runAgent({ ...credentials, ...state.settings, mode: session.mode, messages: session.messages.filter(m => m !== answer && !m.demo), files, selected, signal: controller.signal,
       onText: text => { answer.text += text; scheduleMessagePaint(answer); },
       onActivity: activity => { ui.activity.push(activity); if ($('#activity-slot')) $('#activity-slot').innerHTML = activityView(); },
@@ -379,7 +393,9 @@ async function handleAction(action, button) {
       button.disabled = true;
       const controller = new AbortController(); ui.dialogAbort = controller;
       try {
-        const models = await listModels({ ...credentials, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]) });
+        const models = credentials.origin === 'ollama'
+          ? await listOllamaModels({ signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]) })
+          : await listModels({ ...credentials, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]) });
         if (controller.signal.aborted || !button.isConnected || !modal.open) return;
         ui.dialogAbort = null; ui.models = models; modelsDialog(); toast(`${ui.models.length} available models loaded.`);
       } catch (error) { if (!controller.signal.aborted && button.isConnected) { formError(error.message.split(credentials.key || '\0').join('[redacted]')); button.disabled = false; } }
@@ -472,18 +488,23 @@ document.addEventListener('submit', async event => {
     if (form.id === 'compose-form') { await sendMessage(); return; }
     if (form.id === 'connect-form') {
       if (!ensureNotRunning()) return;
-      const key = $('#api-key').value.trim(), origin = endpointOrigin($('#endpoint-type').value === 'proxy' ? $('#proxy-origin').value : ANTHROPIC_ORIGIN);
-      if (!$('#key-consent').checked) throw new Error('Review and accept the browser key disclosure first.');
-      if (!key) throw new Error('Enter an API key.');
+      const type = $('#endpoint-type').value;
+      const isOllama = type === 'ollama';
+      const key = isOllama ? 'ollama' : $('#api-key').value.trim();
+      const origin = isOllama ? 'ollama' : endpointOrigin(type === 'proxy' ? $('#proxy-origin').value : ANTHROPIC_ORIGIN);
+      if (!isOllama && !$('#key-consent').checked) throw new Error('Review and accept the browser key disclosure first.');
+      if (!isOllama && !key) throw new Error('Enter an API key.');
       const button = $('#connect-submit'); button.disabled = true; button.textContent = 'Testing connection…';
       const controller = new AbortController(); ui.dialogAbort = controller;
       try {
-        const models = await listModels({ key, origin, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]) });
+        const models = isOllama
+          ? await listOllamaModels({ signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]) })
+          : await listModels({ key, origin, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]) });
         if (controller.signal.aborted || !form.isConnected || !modal.open) return;
         ui.dialogAbort = null;
         credentials.key = key; credentials.origin = origin; ui.models = models; ui.demo = false;
         if (models.length && !models.some(m => m.id === state.settings.model)) state.settings.model = models[0].id;
-        persist(); closeDialog(); render(); toast('Connected. Your key is held only in memory.');
+        persist(); closeDialog(); render(); toast(isOllama ? 'Connected to Ollama.' : 'Connected. Your key is held only in memory.');
       } catch (error) { if (controller.signal.aborted || !form.isConnected) return; if (button.isConnected) { button.disabled = false; button.textContent = 'Connect & test'; } throw new Error(error.message.split(key).join('[redacted]')); }
       finally { if (ui.dialogAbort === controller) ui.dialogAbort = null; }
     }

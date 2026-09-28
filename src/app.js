@@ -596,4 +596,5 @@ window.addEventListener('storage', event => { if (event.key === STORAGE_KEY) toa
 window.addEventListener('pagehide', () => { persist(); activeRun?.controller.abort(); renderer?.destroy(); });
 window.addEventListener('pageshow', event => { if (event.persisted) render(); });
 applyTheme(); render();
+window.ui = ui;
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* Online operation does not require offline caching. */ });

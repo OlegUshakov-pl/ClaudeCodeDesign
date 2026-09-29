@@ -79,7 +79,7 @@ function mobileNav() {
 }
 function composer(chat = false) {
   const runningHere = Boolean(activeRun && (!chat || activeRun.sessionId === currentRoute.id));
-  return `<div class="${chat ? 'chat-composer' : ''}"><form class="composer" id="compose-form"><label class="sr-only" for="prompt">Message Claude</label><textarea id="prompt" rows="2" maxlength="24000" placeholder="${chat ? 'Keep the good ideas going…' : 'What would you like to build?'}" ${runningHere ? 'disabled' : ''}>${esc(ui.draft)}</textarea><div class="context-chips">${ui.selected.map(path => `<button class="context-chip" type="button" data-action="context" title="Review shared context">${esc(path)}</button>`).join('')}</div><div class="composer-toolbar"><button class="context-button" type="button" data-action="context" aria-label="Choose file context">${icon('plus')}<span>${ui.selected.length ? `${ui.selected.length} files` : 'Add context'}</span></button><select class="mode-select" id="mode" aria-label="Assistant mode">${Object.entries(MODES).map(([key,label]) => `<option value="${key}" ${ui.mode === key ? 'selected' : ''}>${label} mode</option>`).join('')}</select><button class="model-select" type="button" data-action="models" title="Choose model"><span>${ui.demo ? 'Local demo' : esc(modelName())}</span>${icon('down')}</button>${runningHere ? `<button class="send-button" type="button" data-action="stop" aria-label="Stop response">${icon('stop')}</button>` : `<button class="send-button" type="submit" aria-label="Send message" ${!ui.draft.trim() || activeRun ? 'disabled' : ''}>${icon('send')}</button>`}</div></form><div class="composer-hint"><span>${icon('shield')}${ui.demo ? 'Demo stays local.' : 'Only selected context is sent.'} <button class="text-button" data-action="${ui.demo ? 'connect' : 'context'}">${ui.demo ? 'Connect for live Claude.' : 'Review context.'}</button></span><span class="keyboard-hint">${chat ? 'Check important outputs.' : 'Enter to send'} <span aria-hidden="true">·</span> Shift + Enter for a new line</span></div></div>`;
+  return `<div class="${chat ? 'chat-composer' : ''}"><form class="composer" id="compose-form"><label class="sr-only" for="prompt">Message Claude</label><textarea id="prompt" rows="2" maxlength="24000" placeholder="${chat ? 'Keep the good ideas going…' : 'What would you like to build?'}" ${runningHere ? 'disabled' : ''}>${esc(ui.draft)}</textarea><div class="context-chips">${ui.selected.map(path => `<button class="context-chip" type="button" data-action="context" title="Review shared context">${esc(path)}</button>`).join('')}</div><div class="composer-toolbar"><button class="context-button" type="button" data-action="context" aria-label="Choose file context">${icon('plus')}<span>${ui.selected.length ? `${ui.selected.length} files` : 'Add context'}</span></button><select class="mode-select" id="mode" aria-label="Assistant mode">${Object.entries(MODES).map(([key,label]) => `<option value="${key}" ${ui.mode === key ? 'selected' : ''}>${label} mode</option>`).join('')}</select>${credentials.origin === 'ollama' ? `<button class="thinking-toggle${state.settings.thinking ? ' on' : ''}" type="button" data-action="thinking" aria-pressed="${state.settings.thinking}" title="Ollama thinking mode: ${state.settings.thinking ? 'on' : 'off'}">${icon('spark')}<span>Think</span></button>` : ''}<button class="model-select" type="button" data-action="models" title="Choose model"><span>${ui.demo ? 'Local demo' : esc(modelName())}</span>${icon('down')}</button>${runningHere ? `<button class="send-button" type="button" data-action="stop" aria-label="Stop response">${icon('stop')}</button>` : `<button class="send-button" type="submit" aria-label="Send message" ${!ui.draft.trim() || activeRun ? 'disabled' : ''}>${icon('send')}</button>`}</div></form><div class="composer-hint"><span>${icon('shield')}${ui.demo ? 'Demo stays local.' : 'Only selected context is sent.'} <button class="text-button" data-action="${ui.demo ? 'connect' : 'context'}">${ui.demo ? 'Connect for live Claude.' : 'Review context.'}</button></span><span class="keyboard-hint">${chat ? 'Check important outputs.' : 'Enter to send'} <span aria-hidden="true">·</span> Shift + Enter for a new line</span></div></div>`;
 }
 function homeView() {
   const sessions = recentSessions().slice(0, 2);
@@ -100,8 +100,13 @@ function libraryView() {
   const prompts = [...PROMPTS, ...state.prompts].filter(p => ui.promptFilter === 'All' || p.category === ui.promptFilter);
   return `<div class="page-heading"><div><div class="eyebrow">A head start, thoughtfully made</div><h1>Skip the blank page.</h1><p>Considered prompts for better questions, clearer code, and bigger possibilities.</p></div><button class="button" data-action="new-prompt">${icon('plus')} Your own prompt</button></div><div class="filters">${['All','Design','Code','Understand','Your prompts'].map(c => `<button class="filter ${ui.promptFilter === c ? 'active' : ''}" data-action="filter-prompt" data-id="${c}" aria-pressed="${ui.promptFilter === c}">${c}</button>`).join('')}</div><div class="card-grid">${prompts.map(p => `<article class="card prompt-card"><div class="session-card-top"><div class="card-icon">${icon(p.icon)}</div><span class="badge">${p.category}</span></div><h3>${esc(p.title)}</h3><p>${esc(p.description ?? p.text.slice(0, 160))}</p><div class="card-foot"><button class="button small" data-action="use-prompt" data-id="${p.id}">Use prompt ${icon('arrow')}</button><div><button class="icon-button" data-action="copy-prompt" data-id="${p.id}" aria-label="Copy prompt">${icon('copy')}</button>${p.category === 'Your prompts' ? `<button class="icon-button" data-action="delete-prompt" data-id="${p.id}" aria-label="Delete prompt">${icon('trash')}</button>` : ''}</div></div></article>`).join('')}</div>${prompts.length ? '' : '<div class="empty-state"><h2>Make it your own.</h2><p>Save the prompts you return to, right here.</p><button class="button" data-action="new-prompt">Create a prompt</button></div>'}${footer()}`;
 }
+function messageBody(message) {
+  if (message.role !== 'assistant') return esc(message.text);
+  const thought = message.thinking ? `<details class="thinking-block" ${activeRun ? 'open' : ''}><summary>${icon('spark')}<span>Thinking</span></summary><div>${esc(message.thinking)}</div></details>` : '';
+  return thought + markdown(message.text);
+}
 function messageView(message) {
-  return `<article class="message ${message.role}" data-message="${message.id}"><div class="message-header">${message.role === 'assistant' ? mark() : '<span class="message-avatar">Y</span>'}<span>${message.role === 'assistant' ? 'Claude' : 'You'}</span>${message.demo ? '<span class="badge orange">Local demo</span>' : ''}<span class="message-actions"><button class="text-button" data-action="copy-message" data-id="${message.id}" aria-label="Copy message">${icon('copy')}</button>${message.role === 'assistant' && message.text.trim() ? `<button class="text-button" data-action="save-message" data-id="${message.id}" data-ext="md" title="Save this response as a Markdown file">.md</button><button class="text-button" data-action="save-message" data-id="${message.id}" data-ext="txt" title="Save this response as a text file">.txt</button>` : ''}</span></div><div class="message-body">${message.role === 'assistant' ? markdown(message.text) : esc(message.text)}</div></article>`;
+  return `<article class="message ${message.role}" data-message="${message.id}"><div class="message-header">${message.role === 'assistant' ? mark() : '<span class="message-avatar">Y</span>'}<span>${message.role === 'assistant' ? 'Claude' : 'You'}</span>${message.demo ? '<span class="badge orange">Local demo</span>' : ''}<span class="message-actions"><button class="text-button" data-action="copy-message" data-id="${message.id}" aria-label="Copy message">${icon('copy')}</button>${message.role === 'assistant' && message.text.trim() ? `<button class="text-button" data-action="save-message" data-id="${message.id}" data-ext="md" title="Save this response as a Markdown file">.md</button><button class="text-button" data-action="save-message" data-id="${message.id}" data-ext="txt" title="Save this response as a text file">.txt</button>` : ''}</span></div><div class="message-body">${messageBody(message)}</div></article>`;
 }
 function chatView() {
   const session = sessionById();
@@ -302,7 +307,7 @@ function scheduleMessagePaint(message) {
     const body = $(`[data-message="${message.id}"] .message-body`);
     if (body) {
       const nearBottom = window.innerHeight + window.scrollY > document.documentElement.scrollHeight - 230;
-      body.innerHTML = markdown(message.text) + (activeRun ? '<span class="streaming-dot" aria-label="Response streaming"></span>' : '');
+      body.innerHTML = messageBody(message) + (activeRun ? '<span class="streaming-dot" aria-label="Response streaming"></span>' : '');
       if (nearBottom) window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
     }
     if ($('#activity-slot')) $('#activity-slot').innerHTML = activityView();
@@ -334,6 +339,7 @@ async function sendMessage() {
     if (wasDemo) await demoResponse(session, answer, controller.signal);
     else if (credentials.origin === 'ollama') await runOllamaAgent({ ...state.settings, mode: session.mode, messages: session.messages.filter(m => m !== answer && !m.demo), files, selected, signal: controller.signal,
       onText: text => { answer.text += text; scheduleMessagePaint(answer); },
+      onThinking: chunk => { answer.thinking = (answer.thinking ?? '') + chunk; scheduleMessagePaint(answer); },
       onActivity: activity => { ui.activity.push(activity); if ($('#activity-slot')) $('#activity-slot').innerHTML = activityView(); },
       onProposal: addProposal,
       onUsage: usage => { session.usage = usage; },
@@ -379,6 +385,12 @@ async function handleAction(action, button) {
     case 'close-dialog': closeDialog(); break;
     case 'theme': state.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; persist(); render(); break;
     case 'demo': modelsDialog(); break;
+    case 'thinking': {
+      if (activeRun) { toast('Wait for the current response before changing thinking mode.'); break; }
+      state.settings.thinking = !state.settings.thinking; persist(); render();
+      toast(state.settings.thinking ? 'Thinking mode on. Model reasoning is shown in a collapsible block.' : 'Thinking mode off.');
+      break;
+    }
     case 'stop': activeRun?.controller.abort(); break;
     case 'open-drawer':
       ui.drawer = true; document.body.classList.add('sidebar-open'); $('#sidebar').inert = false;

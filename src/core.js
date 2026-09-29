@@ -92,7 +92,7 @@ export const STARTER_FILES = Object.freeze({
   'style.css': '* { box-sizing: border-box; }\nbody { margin: 0; background: #f6f3eb; color: #30352f; font: 15px/1.7 system-ui, sans-serif; }\nmain { max-width: 720px; margin: auto; padding: 60px 24px; text-align: center; }\n.spark { font-size: 56px; color: #b85439; }\n.eyebrow { font-size: 10px; letter-spacing: .2em; margin: 18px 0 30px; }\nh1 { font: 64px/.98 Georgia, serif; letter-spacing: -3px; margin: 0 0 26px; }\nem { color: #b85439; font-weight: normal; }\np { color: #74786e; }\nbutton { background: #30352f; color: #fff; border: 0; padding: 15px 24px; border-radius: 7px; cursor: pointer; font: inherit; margin-top: 18px; min-height: 48px; }\nbutton:hover { background: #b85439; }\nbutton span { margin-left: 30px; }\n#count { font-size: 12px; min-height: 2em; }\nfooter { border-top: 1px solid #deded3; margin-top: 48px; padding-top: 24px; font-size: 11px; color: #83877c; }\n@media (max-width: 420px) { h1 { font-size: 48px; } main { padding-top: 32px; } }\n',
   'app.js': "const button = document.getElementById('step');\nconst count = document.getElementById('count');\nlet steps = 0;\nbutton.addEventListener('click', () => {\n  steps++;\n  count.textContent = `${steps} ${steps === 1 ? 'step' : 'steps'} forward. Keep going.`;\n  button.textContent = 'Take another step ↗';\n});\n",
 });
-export function freshState() { return { version: 1, theme: 'light', projectName: 'A little momentum', files: { ...STARTER_FILES }, selectedFile: 'index.html', sessions: [], prompts: [], settings: { model: 'auto', maxTokens: 4096, system: '' } }; }
+export function freshState() { return { version: 1, theme: 'light', projectName: 'A little momentum', files: { ...STARTER_FILES }, selectedFile: 'index.html', sessions: [], prompts: [], settings: { model: 'auto', maxTokens: 4096, system: '', thinking: false } }; }
 const text = (value, limit, fallback = '') => typeof value === 'string' ? value.slice(0, limit) : fallback;
 const date = value => Number.isFinite(value) && value >= 0 && value <= 8e15 ? value : Date.now();
 const id = value => typeof value === 'string' && /^[\w-]{1,80}$/.test(value) ? value : uid();
@@ -107,7 +107,7 @@ export function hydrate(input) {
   }
   state.selectedFile = Object.hasOwn(state.files, input.selectedFile) ? input.selectedFile : Object.keys(state.files)[0] ?? '';
   const settings = input.settings ?? {};
-  state.settings = { model: text(settings.model, 160, 'auto'), maxTokens: Number.isInteger(settings.maxTokens) && settings.maxTokens >= 256 && settings.maxTokens <= 200_000 ? settings.maxTokens : 4096, system: text(settings.system, 8000) };
+  state.settings = { model: text(settings.model, 160, 'auto'), maxTokens: Number.isInteger(settings.maxTokens) && settings.maxTokens >= 256 && settings.maxTokens <= 200_000 ? settings.maxTokens : 4096, system: text(settings.system, 8000), thinking: settings.thinking === true };
   const seen = new Set(); let remaining = 2_000_000;
   state.sessions = (Array.isArray(input.sessions) ? input.sessions : []).slice(0, 100).filter(s => s && typeof s === 'object').map(s => {
     let sid = id(s.id); if (seen.has(sid)) sid = uid(); seen.add(sid);
@@ -115,7 +115,8 @@ export function hydrate(input) {
     const messages = (Array.isArray(s.messages) ? s.messages : []).slice(0, 120).filter(m => m && ['user', 'assistant'].includes(m.role)).map(m => {
       let mid = id(m.id); if (mids.has(mid)) mid = uid(); mids.add(mid);
       const value = text(m.text, Math.max(0, Math.min(100_000, remaining))); remaining -= value.length;
-      return { id: mid, role: m.role, text: value, demo: m.demo === true };
+      const thought = text(m.thinking, Math.max(0, Math.min(100_000, remaining))); remaining -= thought.length;
+      return { id: mid, role: m.role, text: value, ...(thought ? { thinking: thought } : {}), demo: m.demo === true };
     });
     return { id: sid, title: text(s.title, 100, 'Untitled session'), created: date(s.created), updated: date(s.updated), mode: ['build', 'plan', 'review', 'explain'].includes(s.mode) ? s.mode : 'build', messages, pinned: s.pinned === true, archived: s.archived === true };
   });

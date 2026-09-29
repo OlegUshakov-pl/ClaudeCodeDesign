@@ -14,6 +14,7 @@ Built with plain HTML, CSS, JavaScript modules, and a real WebGPU particle rende
 - **No API key required** — select "Local Ollama" in the connect dialog and start chatting
 - **CORS proxy** — `scripts/serve.mjs` proxies Ollama requests, eliminating browser CORS issues
 - **NDJSON streaming** — handles Ollama's streaming format alongside Anthropic SSE
+- **Thinking mode toggle** — the **Think** button in the composer turns Ollama reasoning on/off per request (`think: true|false`); the reasoning trace streams into a collapsible block above the answer
 
 ## Run locally
 

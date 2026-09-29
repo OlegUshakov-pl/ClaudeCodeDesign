@@ -1,4 +1,4 @@
-# Claude Code Design — Ollama Fork
+# Claude Code Design — Ollama Fork of [wieslawsoltes/ClaudeCodeDesign](https://github.com/wieslawsoltes/ClaudeCodeDesign)
 
 **A space to think. A place to build.**
 

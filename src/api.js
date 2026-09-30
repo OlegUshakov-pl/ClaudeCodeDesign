@@ -17,6 +17,28 @@ async function responseError(response) {
   const labels = { 400: 'The model rejected this request. Check the model ID and input size.', 401: 'The API key is invalid. Reconnect with a valid key.', 403: 'This API key does not have access to the selected resource.', 404: 'The model or endpoint was not found. Refresh the available models.', 429: 'Rate limit reached. Wait before retrying; retries are never automatic.', 529: 'The provider is busy. Try again shortly.' };
   return new Error(`${labels[response.status] ?? `Provider returned HTTP ${response.status}.`}${detail ? ` ${String(detail).slice(0, 400)}` : ''}`);
 }
+export function unwrapOllamaError(value, depth = 0) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  if (depth < 3 && /^\s*\{/.test(text)) {
+    const parsed = (() => { try { return JSON.parse(text); } catch { return null; } })();
+    const inner = parsed?.error ?? parsed?.message;
+    if (inner !== undefined && inner !== null && String(inner) !== text) return unwrapOllamaError(inner, depth + 1);
+  }
+  return String(text);
+}
+const sentence = text => { const value = String(text ?? '').trim(); return value && !/[.!?]$/.test(value) ? `${value}.` : value; };
+const LOST_STREAM = /terminated|socket hang up|econnreset|other side closed|network error|invalid streaming|unexpected end/i;
+function ollamaAdvice(detail) {
+  return /context size|context length|maximum context|exceeds the available|n_ctx/i.test(detail) ? ' Local models hold far less context than hosted ones: select fewer files, shorten the conversation, or lower the response limit.' : '';
+}
+export async function ollamaResponseError(response) {
+  let detail = '';
+  try { const body = await response.json(); detail = unwrapOllamaError(body?.error ?? body?.message ?? body); } catch { detail = ''; }
+  detail = sentence(String(detail).slice(0, 400));
+  if (response.status >= 502) return new Error(`Could not reach Ollama. ${detail || 'Check that it is running with "ollama serve".'}`);
+  const labels = { 400: 'Ollama rejected this request.', 404: 'Ollama did not find the model or endpoint. Refresh the model list and check the model ID.', 413: 'The request is too large for Ollama to accept.', 500: 'Ollama failed while running the model. It may be out of memory.', 503: 'Ollama is busy or still loading the model. Try again shortly.' };
+  return new Error(`${labels[response.status] ?? `Ollama returned HTTP ${response.status}.`}${detail ? ` ${detail}` : ''}${ollamaAdvice(detail)}`);
+}
 /** Chunk-safe SSE framing; supports CRLF split across chunks and multiline data. */
 export async function* readSSE(stream, signal) {
   if (!stream) throw new Error('The provider returned no response stream.');
@@ -97,7 +119,7 @@ export async function listModels({ key, origin = ANTHROPIC_ORIGIN, signal, fetch
 
 export async function listOllamaModels({ signal, fetchImpl = fetch }) {
   const response = await fetchImpl('/api/ollama/models', { signal, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' });
-  if (!response.ok) throw new Error('Could not reach Ollama. Check that it is running.');
+  if (!response.ok) throw await ollamaResponseError(response);
   const json = await response.json();
   if (!Array.isArray(json.models)) throw new Error('Ollama returned an invalid model list.');
   return json.models.filter(m => typeof m.id === 'string').map(m => ({ id: m.id, name: m.name ?? m.id }));
@@ -148,18 +170,25 @@ export async function runOllamaAgent({ model, maxTokens = 4096, system = '', mod
   let response;
   try { response = await fetchImpl('/api/ollama/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, messages: ollamaMessages, stream: true, think: thinking === true, options: { num_predict: maxTokens } }), signal, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' }); }
   catch (error) { if (signal?.aborted) throw error; throw new Error('Could not reach Ollama. Check that it is running.'); }
-  if (!response.ok) throw new Error('Ollama returned an error.');
-  for await (const event of readNDJSON(response.body, signal)) {
-    const content = event?.message?.content;
-    if (typeof content === 'string' && content) onText(content);
-    const reasoning = event?.message?.thinking;
-    if (typeof reasoning === 'string' && reasoning) onThinking?.(reasoning);
-    if (event?.done) {
-      totalInput += event?.prompt_eval_count ?? 0;
-      totalOutput += event?.eval_count ?? 0;
-      onUsage?.({ input: totalInput, output: totalOutput, requests: 1 });
-      return { input: totalInput, output: totalOutput };
+  if (!response.ok) throw await ollamaResponseError(response);
+  try {
+    for await (const event of readNDJSON(response.body, signal)) {
+      if (typeof event?.error === 'string' && event.error) throw new Error(`${sentence(unwrapOllamaError(event.error).slice(0, 400))}${ollamaAdvice(event.error)}`);
+      const content = event?.message?.content;
+      if (typeof content === 'string' && content) onText(content);
+      const reasoning = event?.message?.thinking;
+      if (typeof reasoning === 'string' && reasoning) onThinking?.(reasoning);
+      if (event?.done) {
+        totalInput += event?.prompt_eval_count ?? 0;
+        totalOutput += event?.eval_count ?? 0;
+        onUsage?.({ input: totalInput, output: totalOutput, requests: 1 });
+        return { input: totalInput, output: totalOutput };
+      }
     }
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    if (LOST_STREAM.test(String(error?.message ?? ''))) throw new Error('The connection to Ollama was lost while it was responding. Partial output is preserved; retry the request.');
+    throw error;
   }
   throw new Error('The stream ended before completion. Partial output is preserved; retry explicitly.');
 }

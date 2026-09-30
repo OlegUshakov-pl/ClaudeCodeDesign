@@ -8,6 +8,10 @@ The browser-access header is sent only to `https://api.anthropic.com`, not arbit
 
 Memory-only does not mean theft-proof. Browser extensions, developer tools, compromised hosting, or malicious same-origin scripts can inspect browser-held credentials. GitHub Pages project sites under one account share an origin. Use a dedicated trusted origin for sensitive use and an authenticated server-side gateway for multi-user/production deployment. Do not embed a shared key in this static app. Rate/cost limits must also be set at the provider.
 
+### Local Ollama (no key)
+
+Selecting **Local Ollama** stores no API key: requests go to the loopback proxy (`localhost:4173/api/ollama/*` → `localhost:11434`) and carry only the explicitly selected file context. The local threat model is different from hosted Anthropic use: any local process or page that can reach the loopback Ollama port can use the models, and the proxy adds CORS headers for local development. Do not expose the dev server (`serve.mjs` binds `0.0.0.0`) or Ollama to an untrusted network.
+
 ## Workspace data and sharing
 
 Files, conversations, and prompts are stored unencrypted in this browser. They are not cloud backups. Private/incognito sessions, storage eviction, quota failures, and clearing browser data can lose them. Export backups regularly. A second tab produces a conflict warning, not a CRDT merge; concurrent multi-tab editing is not qualified.

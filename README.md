@@ -68,7 +68,14 @@ npm test
 npm run build
 python -m pip install playwright==1.57.0
 python -m playwright install chromium
-python tests/browser.py
+```
+
+Browser acceptance needs a running server in a separate terminal (the test itself does not start it, and the offline check requires the `dist/` build above):
+
+```sh
+npm start
+# Open http://localhost:4173 in another terminal:
+python tests/browser.py --url http://127.0.0.1:4173/ --output qa
 ```
 
 ## Deliberate boundaries

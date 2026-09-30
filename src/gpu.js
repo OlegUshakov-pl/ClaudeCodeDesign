@@ -55,7 +55,7 @@ export class AmbientRenderer {
       const module = device.createShaderModule({ code: SHADER });
       const format = navigator.gpu.getPreferredCanvasFormat();
       this.pipeline = await device.createRenderPipelineAsync({ layout: 'auto', vertex: { module, entryPoint: 'vertexMain' }, fragment: { module, entryPoint: 'fragmentMain', targets: [{ format, blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } } }] }, primitive: { topology: 'triangle-list' } });
-      if (this.dead) return;
+      if (this.dead) { device.destroy(); return; }
       this.context = this.canvas.getContext('webgpu');
       if (!this.context) throw new Error('No WebGPU canvas');
       this.context.configure({ device, format, alphaMode: 'premultiplied' });

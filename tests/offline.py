@@ -72,3 +72,7 @@ def verify_offline(browser):
                     except subprocess.TimeoutExpired:
                         server.kill()
                         server.wait(timeout=5)
+
+
+if __name__ == '__main__':
+    raise SystemExit('offline.py is a helper imported by browser.py; run: python tests/browser.py --url http://127.0.0.1:4173/ --output qa')

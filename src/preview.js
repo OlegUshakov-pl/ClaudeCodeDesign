@@ -83,7 +83,7 @@ export function previewDocument(files, entry = 'index.html') {
     for (const script of fragment.querySelectorAll('script')) {
       if (!script.hasAttribute('src')) continue;
       const path = projectPath(script.getAttribute('src'), entry);
-      if (path && Object.hasOwn(files, path) && /\.[cm]?js$/i.test(path)) {
+      if (path && Object.hasOwn(files, path) && /\.(?:mjs|cjs|js|jsx|mts|cts|ts|tsx)$/i.test(path)) {
         script.removeAttribute('src'); script.removeAttribute('integrity'); script.removeAttribute('crossorigin');
         script.textContent = files[path].replace(/<\/script/gi, '<\\/script');
       } else script.remove();

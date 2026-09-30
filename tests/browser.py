@@ -5,8 +5,12 @@ import argparse
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from offline import verify_offline
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--url', default='http://127.0.0.1:4173/')
@@ -52,7 +56,6 @@ try:
     launch = {'headless': True}
     if args.browser == 'chromium':
       launch['args'] = ['--no-sandbox', '--disable-dev-shm-usage', '--enable-unsafe-webgpu', '--use-angle=swiftshader', '--use-vulkan=swiftshader', '--enable-features=Vulkan']
-      launch['channel'] = 'chromium'
       if os.environ.get('CHROMIUM_EXECUTABLE'): launch['executable_path'] = os.environ['CHROMIUM_EXECUTABLE']
     browser = getattr(p, args.browser).launch(**launch)
     context = browser.new_context(viewport={'width':1440,'height':1000}, reduced_motion='reduce', accept_downloads=True)
@@ -179,7 +182,6 @@ try:
       assert not errors, errors
       passed('No uncaught application JavaScript errors')
       # A real stopped origin avoids WebKit's offline-emulation reload failure.
-      from offline import verify_offline
       passed('Service worker survives a real origin outage and persists offline edits', verify_offline(browser))
     else:
       assert not errors, errors

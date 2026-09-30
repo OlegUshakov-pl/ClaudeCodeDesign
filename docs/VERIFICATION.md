@@ -3,10 +3,10 @@
 ## Reproducible gates
 
 - `npm run check`: JavaScript syntax, preview bootstrap consistency, and entry metadata.
-- `npm test`: 68 dependency-free Node tests, including UTF-8 and storage bounds, traversal/secret filenames, prototype safety, selected-only context, stale proposals, bounded diffs, safe Markdown, sanitized backups, independent ZIP CRC conventions, imports, origin/header handling, paginated model discovery, byte-split Unicode SSE, stalled-stream abort, protocol failures, tool authorization, the six-request cap, offline hash-route normalization, app-shell-only interception, and project-scoped cache cleanup.
+- `npm test`: 76 dependency-free Node tests, including UTF-8 and storage bounds, traversal/secret filenames, prototype safety, selected-only context, stale proposals, bounded diffs, safe Markdown, sanitized backups, independent ZIP CRC conventions, imports, origin/header handling, paginated model discovery, byte-split Unicode SSE, stalled-stream abort, protocol failures, tool authorization, the six-request cap, offline hash-route normalization, app-shell-only interception, and project-scoped cache cleanup.
 - `npm run build`: static `dist/` with no build-time credential or external runtime package.
-- `python tests/browser.py --url URL --output qa-results`: real HTTP browser acceptance and screenshots. The CI server mounts the build at `/ClaudeCodeDesign/` to exercise repository-relative paths.
-- `python tests/browser.py --url PAGES_URL --smoke --output qa-results/live`: public-site smoke after deployment.
+- `python tests/browser.py --url URL --output qa`: real HTTP browser acceptance and screenshots. The CI server mounts the build at `/ClaudeCodeDesign/` to exercise repository-relative paths.
+- `python tests/browser.py --url PAGES_URL --smoke --output qa/live`: public-site smoke after deployment.
 
 ## Browser evidence
 
@@ -24,7 +24,7 @@ Chromium CI uses SwiftShader software WebGPU with Vulkan presentation enabled. A
 
 The local managed browser does not permit HTTP navigation; local in-memory visual inspection alone does not verify origin-dependent features. The normal browser suite runs on GitHub Actions against actual HTTP and never removes production CSP. Its results are the source of truth for those gates and deployment.
 
-No real paid Anthropic completion is executed: no production API key was supplied. Account/model permissions, provider-side CORS, billing, and custom proxy production behavior require the user's own endpoint. Touch emulation is not physical device testing. Software WebGPU is not physical-GPU qualification. No physical-device, screen-reader, exhaustive accessibility, penetration, or production-load certification is claimed. Imported code is untrusted; review it before opening a preview.
+No real paid Anthropic completion is executed: no production API key was supplied. Account/model permissions, provider-side CORS, billing, and custom proxy production behavior require the user's own endpoint. The browser suite mocks only `https://api.anthropic.com/**`; Ollama `/api/ollama/*` paths and the **Think** toggle have Node-level coverage only, no browser acceptance. Touch emulation is not physical device testing. Software WebGPU is not physical-GPU qualification. No physical-device, screen-reader, exhaustive accessibility, penetration, or production-load certification is claimed. Imported code is untrusted; review it before opening a preview.
 
 ## Publication
 

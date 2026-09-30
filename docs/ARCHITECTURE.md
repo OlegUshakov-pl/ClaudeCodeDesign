@@ -1,12 +1,12 @@
 # Architecture
 
-The app is a static module graph with no server dependency for editing, demo use, or previews. Live model calls go directly to an explicitly trusted API origin. HTML carries document semantics and native controls; WebGPU is a progressive visual enhancement, never a requirement for text input or navigation.
+The app is a static module graph with no server dependency for editing, demo use, or previews. Live Anthropic model calls go directly to an explicitly trusted API origin. Live Ollama calls go through the local `scripts/serve.mjs` proxy (`/api/ollama/models`, `/api/ollama/chat`), which is required for Ollama chat. HTML carries document semantics and native controls; WebGPU is a progressive visual enhancement, never a requirement for text input or navigation.
 
 ```text
 index.html
   src/app.js                 routes, views, native dialogs, editor, orchestration
     src/core.js              validation, state, diffs, Markdown, ZIP
-    src/api.js               Anthropic HTTP/SSE client and bounded tool loop
+    src/api.js               Anthropic HTTP/SSE client and bounded tool loop; Ollama NDJSON client (`listOllamaModels`/`runOllamaAgent`)
     src/preview.js           local/public imports and preview document assembly
     src/gpu.js               WebGPU particle rendering and Canvas fallback
     src/icons.js             original inline SVG controls
@@ -35,6 +35,12 @@ The hash router uses subpath-relative assets. Route changes recreate the relevan
 7. Provider-reported token usage is accumulated. The app does not guess prices, invent execution evidence, or show fake terminals.
 
 The request system explicitly tells the model that no terminal, filesystem OS access, git runtime, or deployment tools exist. These instructions are helpful but are not the authorization boundary: tool implementations enforce selected-file access and staged-only writes.
+
+### Ollama flow
+
+1. `scripts/serve.mjs` proxies `GET /api/ollama/models` to Ollama `/api/tags` and streams `POST /api/ollama/chat` from Ollama `/api/chat` as NDJSON.
+2. `src/api.js` (`listOllamaModels`/`runOllamaAgent`) sends only the explicit file context as plain text plus `think: true|false` from the composer **Think** toggle. There is no Anthropic-style tool use: system prompts and file context are plain text, not tool schemas.
+3. Without the local proxy, Ollama chat returns 404; editing, demo, and previews still work offline.
 
 ## Preview isolation
 

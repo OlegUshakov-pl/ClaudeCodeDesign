@@ -187,6 +187,8 @@ function mountPreview() {
     const frame = document.createElement('iframe'); frame.className = `preview-frame ${ui.previewSize}`; frame.title = `Isolated preview of ${entry}`; frame.setAttribute('sandbox', 'allow-scripts'); frame.referrerPolicy = 'no-referrer';
     frame.setAttribute('allow', "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'");
     frame.src = new URL('./preview.html', document.baseURI).href;
+    // Target '*' is required: the sandboxed frame has an opaque origin.
+    // The receiver validates ancestorOrigins + source + type + size before rendering.
     frame.addEventListener('load', () => { frame.contentWindow.postMessage({ type: 'render-preview', html }, '*'); }, { once: true });
     host.replaceChildren(frame);
   } catch (error) { host.textContent = error.message; }
@@ -197,7 +199,7 @@ function openDialog(title, body, subtitle = '') {
   modal.innerHTML = `<div class="dialog-head"><div><h2 id="dialog-title">${esc(title)}</h2>${subtitle ? `<p>${esc(subtitle)}</p>` : ''}</div>${toolbarButton('close-dialog','close','Close dialog')}</div><div class="dialog-body">${body}</div>`;
   if (!modal.open) modal.showModal();
 }
-function closeDialog() { ui.dialogAbort?.abort(); ui.dialogAbort = null; modal.close(); }
+function closeDialog() { ui.dialogAbort?.abort(); ui.dialogAbort = null; if (modal.open) modal.close(); }
 modal.addEventListener('close', () => { if (modal.open) return; ui.dialogAbort?.abort(); ui.dialogAbort = null; modal.innerHTML = ''; ui.importAbort?.abort(); ui.importAbort = null; previousFocus?.isConnected && previousFocus.focus(); });
 modal.addEventListener('click', event => { if (event.target === modal) { const r = modal.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) closeDialog(); } });
 function formError(message) { const node = $('#dialog-error'); if (node) node.textContent = message; else toast(message); }
@@ -562,8 +564,9 @@ document.addEventListener('submit', async event => {
       if (!ensureNotRunning()) return;
       const demo = $('#demo-mode').checked;
       if (!demo && !credentials.key) throw new Error('Connect an API key before turning off the local demo.');
-      state.settings.model = $('#model-id').value.trim(); state.settings.maxTokens = Number($('#max-tokens').value); ui.demo = demo;
-      if (!state.settings.model || !Number.isInteger(state.settings.maxTokens) || state.settings.maxTokens < 256 || state.settings.maxTokens > 200_000) throw new Error('Use a model ID and a token limit from 256 to 200,000. Your provider may accept fewer.');
+      const nextModel = $('#model-id').value.trim(), nextMaxTokens = Number($('#max-tokens').value);
+      if (!nextModel || !Number.isInteger(nextMaxTokens) || nextMaxTokens < 256 || nextMaxTokens > 200_000) throw new Error('Use a model ID and a token limit from 256 to 200,000. Your provider may accept fewer.');
+      state.settings.model = nextModel; state.settings.maxTokens = nextMaxTokens; ui.demo = demo;
       persist(); closeDialog(); render();
     }
     if (form.id === 'settings-form') { state.theme = $('#theme-select').value; state.settings.system = $('#system-instructions').value.trim(); persist(); closeDialog(); render(); toast('Preferences saved.'); }
